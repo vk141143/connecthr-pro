@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Clock, 
   Calendar, 
@@ -22,29 +23,97 @@ import {
   FileText,
   Ticket,
   CalendarDays,
-  DollarSign
+  DollarSign,
+  Edit,
+  Save,
+  X
 } from 'lucide-react';
+
+interface Task {
+  id: number;
+  title: string;
+  description?: string;
+  status: 'pending' | 'in-progress' | 'completed';
+  priority: 'low' | 'medium' | 'high';
+  dueDate: string;
+}
+
+interface Leave {
+  id: number;
+  type: string;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  days: number;
+}
+
+interface SupportTicket {
+  id: number;
+  title: string;
+  category: string;
+  description: string;
+  status: 'open' | 'in-progress' | 'resolved';
+  priority: 'low' | 'medium' | 'high';
+  createdDate: string;
+}
 
 const EmployeeDashboard = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [currentTime, setCurrentTime] = useState('09:30 AM');
+  const [loginHours, setLoginHours] = useState(0);
+  const [loginMinutes, setLoginMinutes] = useState(0);
+  const [checkInTime, setCheckInTime] = useState<Date | null>(null);
 
-  // Mock data
-  const todayHours = '7h 30m';
-  const weekHours = '37h 45m';
-  const monthHours = '158h 20m';
+  // State for tasks
+  const [tasks, setTasks] = useState<Task[]>([
+    { id: 1, title: 'Review project documentation', description: 'Go through the project specs', status: 'pending', priority: 'high', dueDate: '2024-01-15' },
+    { id: 2, title: 'Update user interface mockups', description: 'Redesign the main dashboard', status: 'in-progress', priority: 'medium', dueDate: '2024-01-16' },
+    { id: 3, title: 'Test new features', description: 'Complete QA testing', status: 'completed', priority: 'low', dueDate: '2024-01-14' },
+  ]);
 
-  const tasks = [
-    { id: 1, title: 'Review project documentation', status: 'pending', priority: 'high', dueDate: '2024-01-15' },
-    { id: 2, title: 'Update user interface mockups', status: 'in-progress', priority: 'medium', dueDate: '2024-01-16' },
-    { id: 3, title: 'Test new features', status: 'completed', priority: 'low', dueDate: '2024-01-14' },
-  ];
+  // State for leaves
+  const [leaves, setLeaves] = useState<Leave[]>([
+    { id: 1, type: 'Annual Leave', fromDate: '2024-01-20', toDate: '2024-01-22', reason: 'Family vacation', status: 'approved', days: 3 },
+    { id: 2, type: 'Sick Leave', fromDate: '2024-01-10', toDate: '2024-01-10', reason: 'Medical appointment', status: 'pending', days: 1 },
+  ]);
 
-  const leaves = [
-    { id: 1, type: 'Annual Leave', fromDate: '2024-01-20', toDate: '2024-01-22', status: 'approved', days: 3 },
-    { id: 2, type: 'Sick Leave', fromDate: '2024-01-10', toDate: '2024-01-10', status: 'pending', days: 1 },
-  ];
+  // State for tickets
+  const [tickets, setTickets] = useState<SupportTicket[]>([
+    { id: 1, title: 'Computer running slow', category: 'IT Support', description: 'My computer has been running very slowly lately', status: 'open', priority: 'medium', createdDate: '2024-01-10' },
+    { id: 2, title: 'Request for new software license', category: 'Software', description: 'Need Adobe Photoshop license', status: 'resolved', priority: 'low', createdDate: '2024-01-12' },
+  ]);
+
+  // Dialog states
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  const [isTicketDialogOpen, setIsTicketDialogOpen] = useState(false);
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  // Form states
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'medium', dueDate: '' });
+  const [leaveForm, setLeaveForm] = useState({ type: '', fromDate: '', toDate: '', reason: '' });
+  const [ticketForm, setTicketForm] = useState({ title: '', category: '', description: '', priority: 'medium' });
+  const [profileForm, setProfileForm] = useState({ name: user?.name || '', email: user?.email || '', department: user?.department || '' });
+
+  // Timer effect for login hours
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isCheckedIn && checkInTime) {
+      interval = setInterval(() => {
+        const now = new Date();
+        const diff = now.getTime() - checkInTime.getTime();
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        setLoginHours(hours);
+        setLoginMinutes(minutes);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isCheckedIn, checkInTime]);
 
   const holidays = [
     { id: 1, name: 'New Year Day', date: '2024-01-01', type: 'National' },
@@ -58,18 +127,162 @@ const EmployeeDashboard = () => {
     { id: 3, month: 'October 2023', amount: '$5,500', status: 'paid' },
   ];
 
-  const tickets = [
-    { id: 1, title: 'Computer running slow', category: 'IT Support', status: 'open', priority: 'medium' },
-    { id: 2, title: 'Request for new software license', category: 'Software', status: 'resolved', priority: 'low' },
-  ];
-
   const handleCheckInOut = () => {
+    if (!isCheckedIn) {
+      setCheckInTime(new Date());
+      setLoginHours(0);
+      setLoginMinutes(0);
+    } else {
+      setCheckInTime(null);
+    }
     setIsCheckedIn(!isCheckedIn);
     setCurrentTime(new Date().toLocaleTimeString('en-US', { 
       hour: '2-digit', 
       minute: '2-digit',
       hour12: true 
     }));
+    
+    toast({
+      title: isCheckedIn ? "Checked Out" : "Checked In",
+      description: `You have successfully ${isCheckedIn ? 'checked out' : 'checked in'} at ${new Date().toLocaleTimeString()}`,
+    });
+  };
+
+  const handleCreateTask = () => {
+    if (!taskForm.title.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a task title",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newTask: Task = {
+      id: Math.max(...tasks.map(t => t.id)) + 1,
+      title: taskForm.title,
+      description: taskForm.description,
+      status: 'pending',
+      priority: taskForm.priority as 'low' | 'medium' | 'high',
+      dueDate: taskForm.dueDate
+    };
+
+    setTasks([...tasks, newTask]);
+    setTaskForm({ title: '', description: '', priority: 'medium', dueDate: '' });
+    setIsTaskDialogOpen(false);
+    
+    toast({
+      title: "Task Created",
+      description: "Your task has been created successfully",
+    });
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setTaskForm({
+      title: task.title,
+      description: task.description || '',
+      priority: task.priority,
+      dueDate: task.dueDate
+    });
+    setIsTaskDialogOpen(true);
+  };
+
+  const handleUpdateTask = () => {
+    if (!editingTask) return;
+
+    setTasks(tasks.map(task => 
+      task.id === editingTask.id 
+        ? { 
+            ...task, 
+            title: taskForm.title,
+            description: taskForm.description,
+            priority: taskForm.priority as 'low' | 'medium' | 'high',
+            dueDate: taskForm.dueDate
+          }
+        : task
+    ));
+    
+    setEditingTask(null);
+    setTaskForm({ title: '', description: '', priority: 'medium', dueDate: '' });
+    setIsTaskDialogOpen(false);
+    
+    toast({
+      title: "Task Updated",
+      description: "Your task has been updated successfully",
+    });
+  };
+
+  const handleApplyLeave = () => {
+    if (!leaveForm.type || !leaveForm.fromDate || !leaveForm.toDate || !leaveForm.reason.trim()) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const fromDate = new Date(leaveForm.fromDate);
+    const toDate = new Date(leaveForm.toDate);
+    const days = Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 3600 * 24)) + 1;
+
+    const newLeave: Leave = {
+      id: Math.max(...leaves.map(l => l.id)) + 1,
+      type: leaveForm.type,
+      fromDate: leaveForm.fromDate,
+      toDate: leaveForm.toDate,
+      reason: leaveForm.reason,
+      status: 'pending',
+      days
+    };
+
+    setLeaves([...leaves, newLeave]);
+    setLeaveForm({ type: '', fromDate: '', toDate: '', reason: '' });
+    setIsLeaveDialogOpen(false);
+    
+    toast({
+      title: "Leave Applied",
+      description: "Your leave request has been submitted successfully",
+    });
+  };
+
+  const handleCreateTicket = () => {
+    if (!ticketForm.title.trim() || !ticketForm.category || !ticketForm.description.trim()) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newTicket: SupportTicket = {
+      id: Math.max(...tickets.map(t => t.id)) + 1,
+      title: ticketForm.title,
+      category: ticketForm.category,
+      description: ticketForm.description,
+      status: 'open',
+      priority: ticketForm.priority as 'low' | 'medium' | 'high',
+      createdDate: new Date().toISOString().split('T')[0]
+    };
+
+    setTickets([...tickets, newTicket]);
+    setTicketForm({ title: '', category: '', description: '', priority: 'medium' });
+    setIsTicketDialogOpen(false);
+    
+    toast({
+      title: "Ticket Created",
+      description: "Your support ticket has been submitted successfully",
+    });
+  };
+
+  const handleUpdateProfile = () => {
+    toast({
+      title: "Profile Updated",
+      description: "Your profile has been updated successfully",
+    });
+    setIsProfileDialogOpen(false);
   };
 
   const getStatusBadge = (status: string) => {
@@ -83,6 +296,8 @@ const EmployeeDashboard = () => {
       case 'pending':
       case 'open':
         return <Badge variant="secondary" className="bg-warning text-warning-foreground">⏳ {status}</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive">✗ {status}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -141,6 +356,14 @@ const EmployeeDashboard = () => {
                   <span className="text-sm font-medium">Last Action:</span>
                   <span className="text-sm">{currentTime}</span>
                 </div>
+                {isCheckedIn && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Current Session:</span>
+                    <span className="text-sm font-bold text-primary">
+                      {loginHours}h {loginMinutes}m
+                    </span>
+                  </div>
+                )}
                 <Button
                   onClick={handleCheckInOut}
                   className="w-full"
@@ -162,15 +385,17 @@ const EmployeeDashboard = () => {
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="text-2xl font-bold text-primary">{todayHours}</p>
+                    <p className="text-2xl font-bold text-primary">
+                      {isCheckedIn ? `${loginHours}h ${loginMinutes}m` : '0h 0m'}
+                    </p>
                     <p className="text-xs text-muted-foreground">Today</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-primary">{weekHours}</p>
+                    <p className="text-2xl font-bold text-primary">37h 45m</p>
                     <p className="text-xs text-muted-foreground">This Week</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-primary">{monthHours}</p>
+                    <p className="text-2xl font-bold text-primary">158h 20m</p>
                     <p className="text-xs text-muted-foreground">This Month</p>
                   </div>
                 </div>
@@ -194,31 +419,41 @@ const EmployeeDashboard = () => {
           <TabsContent value="tasks" className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">My Tasks</h3>
-              <Dialog>
+              <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button>
+                  <Button onClick={() => setEditingTask(null)}>
                     <Plus className="h-4 w-4 mr-2" />
                     New Task
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Create New Task</DialogTitle>
-                    <DialogDescription>Add a new task to your list</DialogDescription>
+                    <DialogTitle>{editingTask ? 'Edit Task' : 'Create New Task'}</DialogTitle>
+                    <DialogDescription>
+                      {editingTask ? 'Update your task details' : 'Add a new task to your list'}
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Task Title</Label>
-                      <Input placeholder="Enter task title" />
+                      <Input 
+                        placeholder="Enter task title" 
+                        value={taskForm.title}
+                        onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Description</Label>
-                      <Textarea placeholder="Enter task description" />
+                      <Textarea 
+                        placeholder="Enter task description" 
+                        value={taskForm.description}
+                        onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Priority</Label>
-                        <Select>
+                        <Select value={taskForm.priority} onValueChange={(value) => setTaskForm({ ...taskForm, priority: value })}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select priority" />
                           </SelectTrigger>
@@ -231,10 +466,19 @@ const EmployeeDashboard = () => {
                       </div>
                       <div className="space-y-2">
                         <Label>Due Date</Label>
-                        <Input type="date" />
+                        <Input 
+                          type="date" 
+                          value={taskForm.dueDate}
+                          onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })}
+                        />
                       </div>
                     </div>
-                    <Button className="w-full">Create Task</Button>
+                    <Button 
+                      className="w-full" 
+                      onClick={editingTask ? handleUpdateTask : handleCreateTask}
+                    >
+                      {editingTask ? 'Update Task' : 'Create Task'}
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -246,9 +490,19 @@ const EmployeeDashboard = () => {
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <h4 className="font-medium">{task.title}</h4>
+                        {task.description && (
+                          <p className="text-sm text-muted-foreground">{task.description}</p>
+                        )}
                         <p className="text-sm text-muted-foreground">Due: {task.dueDate}</p>
                       </div>
                       <div className="flex items-center space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditTask(task)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
                         {getPriorityBadge(task.priority)}
                         {getStatusBadge(task.status)}
                       </div>
@@ -263,7 +517,7 @@ const EmployeeDashboard = () => {
           <TabsContent value="leaves" className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">Leave Management</h3>
-              <Dialog>
+              <Dialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
@@ -278,33 +532,47 @@ const EmployeeDashboard = () => {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Leave Type</Label>
-                      <Select>
+                      <Select value={leaveForm.type} onValueChange={(value) => setLeaveForm({ ...leaveForm, type: value })}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select leave type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="annual">Annual Leave</SelectItem>
-                          <SelectItem value="sick">Sick Leave</SelectItem>
-                          <SelectItem value="personal">Personal Leave</SelectItem>
-                          <SelectItem value="emergency">Emergency Leave</SelectItem>
+                          <SelectItem value="Annual Leave">Annual Leave</SelectItem>
+                          <SelectItem value="Sick Leave">Sick Leave</SelectItem>
+                          <SelectItem value="Personal Leave">Personal Leave</SelectItem>
+                          <SelectItem value="Emergency Leave">Emergency Leave</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>From Date</Label>
-                        <Input type="date" />
+                        <Input 
+                          type="date" 
+                          value={leaveForm.fromDate}
+                          onChange={(e) => setLeaveForm({ ...leaveForm, fromDate: e.target.value })}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>To Date</Label>
-                        <Input type="date" />
+                        <Input 
+                          type="date" 
+                          value={leaveForm.toDate}
+                          onChange={(e) => setLeaveForm({ ...leaveForm, toDate: e.target.value })}
+                        />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label>Reason</Label>
-                      <Textarea placeholder="Enter reason for leave" />
+                      <Textarea 
+                        placeholder="Enter reason for leave" 
+                        value={leaveForm.reason}
+                        onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })}
+                      />
                     </div>
-                    <Button className="w-full">Submit Request</Button>
+                    <Button className="w-full" onClick={handleApplyLeave}>
+                      Submit Request
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -319,6 +587,7 @@ const EmployeeDashboard = () => {
                         <p className="text-sm text-muted-foreground">
                           {leave.fromDate} to {leave.toDate} ({leave.days} days)
                         </p>
+                        <p className="text-sm text-muted-foreground">Reason: {leave.reason}</p>
                       </div>
                       {getStatusBadge(leave.status)}
                     </div>
@@ -384,7 +653,7 @@ const EmployeeDashboard = () => {
           <TabsContent value="tickets" className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">Support Tickets</h3>
-              <Dialog>
+              <Dialog open={isTicketDialogOpen} onOpenChange={setIsTicketDialogOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
@@ -399,26 +668,30 @@ const EmployeeDashboard = () => {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Subject</Label>
-                      <Input placeholder="Brief description of the issue" />
+                      <Input 
+                        placeholder="Brief description of the issue" 
+                        value={ticketForm.title}
+                        onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Category</Label>
-                      <Select>
+                      <Select value={ticketForm.category} onValueChange={(value) => setTicketForm({ ...ticketForm, category: value })}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="it">IT Support</SelectItem>
-                          <SelectItem value="hr">HR Related</SelectItem>
-                          <SelectItem value="facilities">Facilities</SelectItem>
-                          <SelectItem value="software">Software</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                          <SelectItem value="IT Support">IT Support</SelectItem>
+                          <SelectItem value="HR Related">HR Related</SelectItem>
+                          <SelectItem value="Facilities">Facilities</SelectItem>
+                          <SelectItem value="Software">Software</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label>Priority</Label>
-                      <Select>
+                      <Select value={ticketForm.priority} onValueChange={(value) => setTicketForm({ ...ticketForm, priority: value })}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select priority" />
                         </SelectTrigger>
@@ -426,15 +699,20 @@ const EmployeeDashboard = () => {
                           <SelectItem value="low">Low</SelectItem>
                           <SelectItem value="medium">Medium</SelectItem>
                           <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="urgent">Urgent</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label>Description</Label>
-                      <Textarea placeholder="Detailed description of the issue" />
+                      <Textarea 
+                        placeholder="Describe the issue in detail" 
+                        value={ticketForm.description}
+                        onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
+                      />
                     </div>
-                    <Button className="w-full">Submit Ticket</Button>
+                    <Button className="w-full" onClick={handleCreateTicket}>
+                      Submit Ticket
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -444,12 +722,10 @@ const EmployeeDashboard = () => {
                 <Card key={ticket.id}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <Ticket className="h-5 w-5 text-primary" />
-                        <div>
-                          <h4 className="font-medium">{ticket.title}</h4>
-                          <p className="text-sm text-muted-foreground">Category: {ticket.category}</p>
-                        </div>
+                      <div className="space-y-1">
+                        <h4 className="font-medium">{ticket.title}</h4>
+                        <p className="text-sm text-muted-foreground">Category: {ticket.category}</p>
+                        <p className="text-sm text-muted-foreground">Created: {ticket.createdDate}</p>
                       </div>
                       <div className="flex items-center space-x-2">
                         {getPriorityBadge(ticket.priority)}
@@ -464,30 +740,71 @@ const EmployeeDashboard = () => {
 
           {/* Profile Tab */}
           <TabsContent value="profile" className="space-y-4">
-            <h3 className="text-lg font-semibold">My Profile</h3>
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold">My Profile</h3>
+              <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Profile
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Profile</DialogTitle>
+                    <DialogDescription>Update your personal information</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Full Name</Label>
+                      <Input 
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input 
+                        value={profileForm.email}
+                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Department</Label>
+                      <Input 
+                        value={profileForm.department}
+                        onChange={(e) => setProfileForm({ ...profileForm, department: e.target.value })}
+                      />
+                    </div>
+                    <Button className="w-full" onClick={handleUpdateProfile}>
+                      Update Profile
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
             <Card>
               <CardContent className="p-6">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-sm font-medium text-muted-foreground">Full Name</Label>
-                      <p className="font-medium">{user?.name}</p>
+                  <div className="flex items-center space-x-4">
+                    <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
+                      <span className="text-2xl font-bold text-primary">
+                        {user?.name?.charAt(0)}
+                      </span>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium text-muted-foreground">Employee ID</Label>
+                      <h4 className="text-xl font-semibold">{user?.name}</h4>
+                      <p className="text-muted-foreground">{user?.role?.toUpperCase()} • {user?.department}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Employee ID</p>
                       <p className="font-medium">{user?.employeeId}</p>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium text-muted-foreground">Email</Label>
+                      <p className="text-sm font-medium text-muted-foreground">Email</p>
                       <p className="font-medium">{user?.email}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-muted-foreground">Department</Label>
-                      <p className="font-medium">{user?.department}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-muted-foreground">Role</Label>
-                      <p className="font-medium capitalize">{user?.role}</p>
                     </div>
                   </div>
                 </div>
