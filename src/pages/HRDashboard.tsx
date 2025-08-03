@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useTimer } from '@/hooks/useTimer';
 import { 
   Users, 
   Clock, 
@@ -80,9 +81,9 @@ const HRDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isCheckedIn, setIsCheckedIn] = useState(false);
-  const [loginHours, setLoginHours] = useState(0);
-  const [loginMinutes, setLoginMinutes] = useState(0);
-  const [checkInTime, setCheckInTime] = useState<Date | null>(null);
+  const [checkInTime, setCheckInTime] = useState<string>('');
+  const [checkOutTime, setCheckOutTime] = useState<string>('');
+  const timer = useTimer();
 
   // State management
   const [employees, setEmployees] = useState<Employee[]>([
@@ -123,35 +124,27 @@ const HRDashboard = () => {
   const [payslipForm, setPayslipForm] = useState({ month: '', files: null as FileList | null });
   const [holidayForm, setHolidayForm] = useState({ name: '', date: '', type: 'National' });
 
-  // Timer effect for login hours
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isCheckedIn && checkInTime) {
-      interval = setInterval(() => {
-        const now = new Date();
-        const diff = now.getTime() - checkInTime.getTime();
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        setLoginHours(hours);
-        setLoginMinutes(minutes);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isCheckedIn, checkInTime]);
-
-  const handleCheckInOut = () => {
-    if (!isCheckedIn) {
-      setCheckInTime(new Date());
-      setLoginHours(0);
-      setLoginMinutes(0);
-    } else {
-      setCheckInTime(null);
-    }
-    setIsCheckedIn(!isCheckedIn);
-    
+  const handleCheckIn = () => {
+    const now = new Date().toLocaleTimeString();
+    setCheckInTime(now);
+    setCheckOutTime('');
+    setIsCheckedIn(true);
+    timer.reset();
+    timer.start();
     toast({
-      title: isCheckedIn ? "Checked Out" : "Checked In",
-      description: `You have successfully ${isCheckedIn ? 'checked out' : 'checked in'} at ${new Date().toLocaleTimeString()}`,
+      title: "Checked In",
+      description: `Welcome! You checked in at ${now}`,
+    });
+  };
+
+  const handleCheckOut = () => {
+    const now = new Date().toLocaleTimeString();
+    setCheckOutTime(now);
+    setIsCheckedIn(false);
+    timer.stop();
+    toast({
+      title: "Checked Out",
+      description: `You checked out at ${now}. Total time: ${timer.formattedTime}`,
     });
   };
 
@@ -328,33 +321,35 @@ const HRDashboard = () => {
                     {isCheckedIn ? 'Checked In' : 'Checked Out'}
                   </Badge>
                 </div>
-                {isCheckedIn && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium">Check-in Time:</span>
+                  <span className="text-sm">{checkInTime || 'Not checked in'}</span>
+                </div>
+                {checkOutTime && (
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium">Current Session:</span>
-                    <span className="text-sm font-bold text-primary">
-                      {loginHours}h {loginMinutes}m
-                    </span>
+                    <span className="text-sm font-medium">Check-out Time:</span>
+                    <span className="text-sm">{checkOutTime}</span>
                   </div>
                 )}
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium">Session Time:</span>
+                  <span className="text-sm font-bold text-primary text-lg">
+                    {timer.formattedTime}
+                  </span>
+                </div>
                 <p className="text-sm text-muted-foreground">Track your working hours as HR staff</p>
               </div>
-              <Button
-                onClick={handleCheckInOut}
-                variant={isCheckedIn ? "outline" : "default"}
-                size="lg"
-              >
-                {isCheckedIn ? (
-                  <>
-                    <PauseCircle className="h-4 w-4 mr-2" />
-                    Check Out
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="h-4 w-4 mr-2" />
-                    Check In
-                  </>
-                )}
-              </Button>
+              {!isCheckedIn ? (
+                <Button onClick={handleCheckIn} size="lg">
+                  <PlayCircle className="h-4 w-4 mr-2" />
+                  Check In
+                </Button>
+              ) : (
+                <Button onClick={handleCheckOut} variant="outline" size="lg">
+                  <PauseCircle className="h-4 w-4 mr-2" />
+                  Check Out
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

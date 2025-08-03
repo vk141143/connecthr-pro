@@ -1,6 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { LogOut, User, Building } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -45,15 +46,18 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
                   {user?.role?.toUpperCase()}
                 </Badge>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={logout}
-                className="flex items-center space-x-2"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </Button>
+              <div className="flex items-center space-x-2">
+                <ThemeToggle />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={logout}
+                  className="flex items-center space-x-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useTimer } from '@/hooks/useTimer';
 import { 
   Clock, 
   Calendar, 
@@ -62,10 +63,9 @@ const EmployeeDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isCheckedIn, setIsCheckedIn] = useState(false);
-  const [currentTime, setCurrentTime] = useState('09:30 AM');
-  const [loginHours, setLoginHours] = useState(0);
-  const [loginMinutes, setLoginMinutes] = useState(0);
-  const [checkInTime, setCheckInTime] = useState<Date | null>(null);
+  const [checkInTime, setCheckInTime] = useState<string>('');
+  const [checkOutTime, setCheckOutTime] = useState<string>('');
+  const timer = useTimer();
 
   // State for tasks
   const [tasks, setTasks] = useState<Task[]>([
@@ -99,21 +99,6 @@ const EmployeeDashboard = () => {
   const [ticketForm, setTicketForm] = useState({ title: '', category: '', description: '', priority: 'medium' });
   const [profileForm, setProfileForm] = useState({ name: user?.name || '', email: user?.email || '', department: user?.department || '' });
 
-  // Timer effect for login hours
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isCheckedIn && checkInTime) {
-      interval = setInterval(() => {
-        const now = new Date();
-        const diff = now.getTime() - checkInTime.getTime();
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        setLoginHours(hours);
-        setLoginMinutes(minutes);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isCheckedIn, checkInTime]);
 
   const holidays = [
     { id: 1, name: 'New Year Day', date: '2024-01-01', type: 'National' },
@@ -127,24 +112,27 @@ const EmployeeDashboard = () => {
     { id: 3, month: 'October 2023', amount: '$5,500', status: 'paid' },
   ];
 
-  const handleCheckInOut = () => {
-    if (!isCheckedIn) {
-      setCheckInTime(new Date());
-      setLoginHours(0);
-      setLoginMinutes(0);
-    } else {
-      setCheckInTime(null);
-    }
-    setIsCheckedIn(!isCheckedIn);
-    setCurrentTime(new Date().toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    }));
-    
+  const handleCheckIn = () => {
+    const now = new Date().toLocaleTimeString();
+    setCheckInTime(now);
+    setCheckOutTime('');
+    setIsCheckedIn(true);
+    timer.reset();
+    timer.start();
     toast({
-      title: isCheckedIn ? "Checked Out" : "Checked In",
-      description: `You have successfully ${isCheckedIn ? 'checked out' : 'checked in'} at ${new Date().toLocaleTimeString()}`,
+      title: "Checked In",
+      description: `Welcome! You checked in at ${now}`,
+    });
+  };
+
+  const handleCheckOut = () => {
+    const now = new Date().toLocaleTimeString();
+    setCheckOutTime(now);
+    setIsCheckedIn(false);
+    timer.stop();
+    toast({
+      title: "Checked Out",
+      description: `You checked out at ${now}. Total time: ${timer.formattedTime}`,
     });
   };
 
@@ -353,40 +341,38 @@ const EmployeeDashboard = () => {
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Last Action:</span>
-                  <span className="text-sm">{currentTime}</span>
+                  <span className="text-sm font-medium">Check-in Time:</span>
+                  <span className="text-sm">{checkInTime || 'Not checked in'}</span>
                 </div>
-                {isCheckedIn && (
+                {checkOutTime && (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Current Session:</span>
-                    <span className="text-sm font-bold text-primary">
-                      {loginHours}h {loginMinutes}m
-                    </span>
+                    <span className="text-sm font-medium">Check-out Time:</span>
+                    <span className="text-sm">{checkOutTime}</span>
                   </div>
                 )}
-                <Button
-                  onClick={handleCheckInOut}
-                  className="w-full"
-                  variant={isCheckedIn ? "outline" : "default"}
-                >
-                  {isCheckedIn ? (
-                    <>
-                      <PauseCircle className="h-4 w-4 mr-2" />
-                      Check Out
-                    </>
-                  ) : (
-                    <>
-                      <PlayCircle className="h-4 w-4 mr-2" />
-                      Check In
-                    </>
-                  )}
-                </Button>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Session Time:</span>
+                  <span className="text-sm font-bold text-primary text-lg">
+                    {timer.formattedTime}
+                  </span>
+                </div>
+                {!isCheckedIn ? (
+                  <Button onClick={handleCheckIn} className="w-full">
+                    <PlayCircle className="h-4 w-4 mr-2" />
+                    Check In
+                  </Button>
+                ) : (
+                  <Button onClick={handleCheckOut} variant="outline" className="w-full">
+                    <PauseCircle className="h-4 w-4 mr-2" />
+                    Check Out
+                  </Button>
+                )}
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <p className="text-2xl font-bold text-primary">
-                      {isCheckedIn ? `${loginHours}h ${loginMinutes}m` : '0h 0m'}
+                      {timer.formattedTime}
                     </p>
                     <p className="text-xs text-muted-foreground">Today</p>
                   </div>
